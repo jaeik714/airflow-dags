@@ -27,6 +27,7 @@ with DAG(
         service_account_name='spark',  # 매우 중요: Spark 계정 권한 사용
         image='my-spark:3.5.0',
         image_pull_policy='Never',     # 로컬 이미지 사용 (Kind 환경)
+        is_delete_operator_pod=False,
         
         # 파드가 뜰 때 자기 자신의 IP를 알 수 있도록 환경변수 설정
         env_vars=[
