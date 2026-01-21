@@ -1,65 +1,50 @@
 from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
-from kubernetes.client import models as k8s
-from airflow.utils.dates import days_ago
+from datetime import datetime, timedelta
 
 # 기본 설정
 default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'start_date': days_ago(1),
+    'owner': 'jaeik',
+    'retries': 0, # 디버깅 중에는 재시도 끄기
+    'retry_delay': timedelta(minutes=5),
 }
 
 with DAG(
-    'spark_pi_k8s',
+    'spark_pi_cluster',
     default_args=default_args,
-    description='Spark Pi calculation on K8s (Native)',
+    description='Spark Pi 분산 처리 (Driver 1개 + Executor 2개)',
     schedule_interval=None,
-    tags=['spark', 'k8s'],
+    start_date=datetime(2025, 1, 1),
     catchup=False,
+    tags=['spark', 'cluster'],
 ) as dag:
 
-    # [수정] SparkOperator 대신 만능 도구인 KubernetesPodOperator 사용
-    t1 = KubernetesPodOperator(
-        task_id='spark_pi_task',
-        name='spark-pi-job',
-        namespace='spark-work',
-        service_account_name='spark',  # 매우 중요: Spark 계정 권한 사용
-        image='my-spark:3.5.0',
-        image_pull_policy='Never',     # 로컬 이미지 사용 (Kind 환경)
+    spark_pi_cluster = KubernetesPodOperator(
+        task_id='run_spark_pi_cluster',
+        name='spark-pi-driver',      # 파드 이름
+        namespace='airflow',          # 네임스페이스
+        image='apache/spark:3.4.2',   # debug에서 성공한 그 이미지
+        image_pull_policy='IfNotPresent',
         
-        # 파드가 뜰 때 자기 자신의 IP를 알 수 있도록 환경변수 설정
-        env_vars=[
-            k8s.V1EnvVar(
-                name="SPARK_LOCAL_IP",
-                value_from=k8s.V1EnvVarSource(
-                    field_ref=k8s.V1ObjectFieldSelector(field_path="status.podIP")
-                )
-            )
-        ],
+        # [중요] Airflow Worker의 권한을 사용하여 Executor를 생성합니다.
+        service_account_name='airflow-worker', 
         
-        # 실행할 명령어 (아까 YAML의 args 부분과 동일)
+        cmds=["/bin/bash", "-c"],
+        
+        # Spark Submit 명령어 (분산 모드 핵심 설정)
         arguments=[
-            "/bin/bash", "-c",
-            """
-            /opt/spark/bin/spark-submit \
-            --master k8s://https://kubernetes.default.svc \
-            --deploy-mode client \
-            --conf spark.kubernetes.container.image=my-spark:3.5.0 \
-            --conf spark.kubernetes.container.image.pullPolicy=Never \
-            --conf spark.kubernetes.namespace=spark-work \
-            --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark \
-            --conf spark.executor.instances=2 \
-            --conf spark.driver.host=$SPARK_LOCAL_IP \
-            --conf spark.driver.bindAddress=$SPARK_LOCAL_IP \
-            --conf spark.executor.memory=512m \
-            --conf spark.driver.memory=512m \
-            --class org.apache.spark.examples.SparkPi \
-            local:///opt/spark/examples/jars/spark-examples_2.12-3.5.0.jar 100
-            """
+            "/opt/spark/bin/spark-submit "
+            "--master k8s://https://kubernetes.default.svc "  # K8s API 서버 주소
+            "--deploy-mode client "                           # 이 파드가 곧 Driver다!
+            "--conf spark.executor.instances=2 "              # Executor 2개 생성 (분산 처리)
+            "--conf spark.kubernetes.container.image=apache/spark:3.4.2 " # Executor도 같은 이미지 사용
+            "--conf spark.kubernetes.namespace=airflow "      # Executor가 생성될 위치
+            "--conf spark.kubernetes.authenticate.driver.serviceAccountName=airflow-worker " # Executor 권한
+            "--class org.apache.spark.examples.SparkPi "      # 실행할 클래스
+            "/opt/spark/examples/jars/spark-examples_2.12-3.4.2.jar 1000" # 반복 횟수 1000
         ],
         
-        # 작업이 끝나면 파드를 삭제할지 여부 (디버깅 위해 False 추천, 완료 후엔 True)
+        # 디버깅용 설정 (성공/실패 후에도 파드 남겨두기)
         is_delete_operator_pod=False,
         get_logs=True,
     )
