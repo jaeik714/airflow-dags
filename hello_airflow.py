@@ -11,7 +11,7 @@ default_args = {
 
 # DAG 정의 (이 이름이 UI에 뜹니다)
 with DAG(
-    '01_hello_airflow_test', 
+    'hello_airflow_test', 
     default_args=default_args,
     description='첫 번째 테스트 DAG',
     schedule_interval=timedelta(days=1),
