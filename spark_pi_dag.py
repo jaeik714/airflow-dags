@@ -40,6 +40,7 @@ with DAG(
             "--conf spark.kubernetes.container.image=apache/spark:3.4.2 " # Executor도 같은 이미지 사용
             "--conf spark.kubernetes.namespace=airflow "      # Executor가 생성될 위치
             "--conf spark.kubernetes.authenticate.driver.serviceAccountName=airflow-worker " # Executor 권한
+            "--conf spark.kubernetes.executor.deleteOnTermination=false "
             "--class org.apache.spark.examples.SparkPi "      # 실행할 클래스
             "/opt/spark/examples/jars/spark-examples_2.12-3.4.2.jar 1000" # 반복 횟수 1000
         ],
