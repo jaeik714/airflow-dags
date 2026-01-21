@@ -10,7 +10,7 @@ default_args = {
 }
 
 with DAG(
-    '03_spark_pi_cluster_final',
+    'spark_pi_cluster_final',
     default_args=default_args,
     description='Spark Pi 분산 처리 (DNS 문제 해결 버전)',
     schedule_interval=None,
