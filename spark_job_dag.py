@@ -7,7 +7,7 @@ from datetime import datetime
 # ==========================================
 # 사용자 설정 (본인 Git 주소로 변경 필수)
 # ==========================================
-GIT_REPO_URL = "https://github.com/사용자아이디/레포이름.git" 
+GIT_REPO_URL = "https://github.com/jaeik714/airflow-dags.git" 
 GIT_BRANCH = "main"
 SCRIPT_FILE_NAME = "hive_batch.py"
 # ==========================================
