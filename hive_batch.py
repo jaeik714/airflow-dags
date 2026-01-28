@@ -1,27 +1,42 @@
+# hive_batch.py
 from pyspark.sql import SparkSession
 import os
 
-# 1. Spark 세션 생성 (Hive 지원 활성화)
-spark = SparkSession.builder \
-    .appName("Spark-Hive-MinIO-Test") \
-    .config("spark.sql.warehouse.dir", "s3a://warehouse/") \
-    .config("hive.metastore.uris", "thrift://hive-metastore:9083") \
-    .enableHiveSupport() \
-    .getOrCreate()
+def run_job():
+    print(">>> [Start] Spark Hive Batch Job 시작")
 
-# 2. 샘플 데이터 생성
-data = [("James", "Sales", 3000), ("Michael", "Sales", 4600), ("Robert", "Sales", 4100)]
-columns = ["employee_name", "department", "salary"]
-df = spark.createDataFrame(data, schema=columns)
+    # 1. Spark 세션 생성 (Hive Metastore 및 MinIO 연동)
+    spark = SparkSession.builder \
+        .appName("Hive-Batch-Ingestion") \
+        .enableHiveSupport() \
+        .getOrCreate()
 
-# 3. Hive 데이터베이스 및 테이블 생성
-spark.sql("CREATE DATABASE IF NOT EXISTS my_db")
-spark.sql("USE my_db")
+    # 2. 테스트 데이터 생성
+    print(">>> 데이터 생성 중...")
+    data = [
+        ("Iron Man", "Engineering", 5000),
+        ("Captain America", "HR", 4000),
+        ("Thor", "Operations", 4500),
+        ("Hulk", "Engineering", 4800)
+    ]
+    columns = ["name", "team", "salary"]
+    df = spark.createDataFrame(data, schema=columns)
 
-# 4. 데이터를 Hive 테이블로 저장 (MinIO에 parquet 형태로 저장됨)
-df.write.mode("overwrite").saveAsTable("employees")
+    # 3. Hive DB 생성 및 사용
+    spark.sql("CREATE DATABASE IF NOT EXISTS my_data_warehouse")
+    spark.sql("USE my_data_warehouse")
 
-# 5. 저장된 데이터 확인
-spark.sql("SELECT * FROM employees").show()
+    # 4. 데이터 저장 (MinIO에 Parquet으로 저장 + Hive 테이블 등록)
+    # saveAsTable은 메타스토어에 테이블 정보를 등록하고, 파일은 warehouse 경로에 저장합니다.
+    print(">>> Hive 테이블(employees)에 데이터 저장 중...")
+    df.write.mode("overwrite").saveAsTable("employees")
 
-spark.stop()
+    # 5. 확인 조회
+    print(">>> 저장된 데이터 조회:")
+    spark.sql("SELECT * FROM employees").show()
+
+    spark.stop()
+    print(">>> [End] 작업 완료")
+
+if __name__ == "__main__":
+    run_job()
