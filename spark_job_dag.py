@@ -5,11 +5,11 @@ from kubernetes.client import models as k8s
 from datetime import datetime
 
 # ==========================================
-# 사용자 설정 (여기를 꼭 수정하세요!)
+# 사용자 설정 (본인 Git 주소로 변경 필수)
 # ==========================================
-GIT_REPO_URL = "https://github.com/jaeik714/airflow-dags.git"  # <--- 본인 Git 주소
+GIT_REPO_URL = "https://github.com/사용자아이디/레포이름.git" 
 GIT_BRANCH = "main"
-SCRIPT_FILE_NAME = "hive_batch.py"  # 실행할 파일명
+SCRIPT_FILE_NAME = "hive_batch.py"
 # ==========================================
 
 with DAG(
@@ -26,12 +26,11 @@ with DAG(
         namespace='airflow',
         image='apache/spark:3.4.2',
         
-        # 1. 파일을 담을 빈 그릇(볼륨) 준비
+        # [수정됨] emptyDir -> empty_dir (파이썬 라이브러리 규격 준수)
         volumes=[
-            k8s.V1Volume(name='code-storage', emptyDir=k8s.V1EmptyDirVolumeSource())
+            k8s.V1Volume(name='code-storage', empty_dir=k8s.V1EmptyDirVolumeSource())
         ],
         
-        # 2. 실행 전, Git에서 코드를 다운로드 (Init Container)
         init_containers=[
             k8s.V1Container(
                 name="fetch-code",
@@ -49,7 +48,6 @@ with DAG(
             )
         ],
         
-        # 3. Spark 컨테이너가 코드를 볼 수 있게 마운트
         volume_mounts=[
             k8s.V1VolumeMount(name="code-storage", mount_path="/tmp/code")
         ],
@@ -57,11 +55,9 @@ with DAG(
         cmds=["/bin/bash", "-c"],
         arguments=[
             f"""
-            # 다운로드된 파일이 있는지 확인 (디버깅용)
             echo "Checking file existence..."
             ls -al /tmp/code/repo/{SCRIPT_FILE_NAME}
 
-            # Spark Submit 실행
             /opt/spark/bin/spark-submit \
             --master local[*] \
             --conf spark.jars.ivy=/tmp/.ivy2 \
