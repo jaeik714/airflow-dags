@@ -28,10 +28,21 @@ with DAG(
         # 4. 실행 명령어 (스파크 예제 실행)
         cmds=["/bin/bash", "-c"],
         arguments=[
-            "/opt/spark/bin/spark-submit "
-            "--master local[*] "
-            "--class org.apache.spark.examples.SparkPi "
-            "/opt/spark/examples/jars/spark-examples_2.12-3.4.2.jar 10"
+            """
+            /opt/spark/bin/spark-submit \
+            --master local[*] \
+            --conf spark.jars.ivy=/tmp/.ivy2 \
+            --packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
+            --conf spark.hadoop.fs.s3a.endpoint=http://minio.airflow.svc.cluster.local:9000 \
+            --conf spark.hadoop.fs.s3a.access.key=admin \
+            --conf spark.hadoop.fs.s3a.secret.key=password123 \
+            --conf spark.hadoop.fs.s3a.path.style.access=true \
+            --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+            --conf spark.hadoop.hive.metastore.uris=thrift://hive-metastore:9083 \
+            --conf spark.sql.warehouse.dir=s3a://warehouse/ \
+            --class com.example.spark.HiveTest \
+            s3a://jars/sparkscalahive_2.12-1.0.jar
+            """
         ],
         
         # [핵심] 파드가 끝나도 절대 삭제하지 않음 -> 터미널에서 로그 확인 가능!
