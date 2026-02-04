@@ -11,13 +11,18 @@ def install_libraries():
     os.makedirs(install_path, exist_ok=True)
 
     print(f">>> 라이브러리를 {install_path} 에 설치합니다...")
+    
+    # [디버깅] 현재 파이썬 버전 출력 (로그에서 확인용)
+    print(f">>> Python Version: {sys.version}")
 
-    # 2. pip install 실행
-    # --target: 지정된 경로에 설치
-    # --no-cache-dir: 홈 디렉토리(/home/spark) 접근 에러 방지
+    # 2. pip install 실행 (버전 고정)
+    # yfinance==0.2.33 : Python 3.8 호환 안정 버전
+    # multitasking==0.0.9 : type[] 문법 에러 방지용 구버전
     subprocess.check_call([
         sys.executable, "-m", "pip", "install",
-        "yfinance", "pandas",
+        "yfinance==0.2.33", 
+        "multitasking==0.0.9",
+        "pandas<2.0.0",   # Spark 3.x와 호환성 좋은 pandas 1.x 버전 유지
         "--target", install_path,
         "--no-cache-dir"
     ])
