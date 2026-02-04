@@ -12,12 +12,14 @@ def install_libraries():
     print(f">>> [Setup] Python Version: {sys.version}")
     print(f">>> [Setup] Installing libraries to {install_path}...")
 
+    # [중요] Python 3.8 호환성을 위한 '확실한' 구버전 고정
     subprocess.check_call([
         sys.executable, "-m", "pip", "install",
-        # 0.2.38: Python 3.8에서 동작하는 비교적 최신 버전
-        "yfinance==0.2.38",
-        "pandas<2.0.0",
-        "lxml",  # yfinance가 html 파싱할 때 필요할 수 있음
+        "yfinance==0.2.18",       # Python 3.8에서 안정적인 버전
+        "multitasking==0.0.7",    # type[] 문법 오류가 없는 구버전
+        "pandas<2.0.0",           # Spark 3.x 호환
+        "lxml",
+        "requests",
         "--target", install_path,
         "--no-cache-dir"
     ])
