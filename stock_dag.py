@@ -24,7 +24,7 @@ with DAG(
         task_id='fetch_stock_prices',
         name='spark-stock-runner',
         namespace='airflow',
-        image='apache/spark:3.4.2',
+        image='apache/spark:3.5.1',
         startup_timeout_seconds=600,
         
         # 1. 코드를 담을 볼륨

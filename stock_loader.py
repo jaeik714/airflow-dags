@@ -10,14 +10,14 @@ def install_libraries():
     os.makedirs(install_path, exist_ok=True)
     
     print(f">>> [Setup] Python Version: {sys.version}")
-    print(f">>> [Setup] Installing libraries to {install_path}...")
+    print(f">>> [Setup] Installing LATEST libraries to {install_path}...")
 
-    # [중요] Python 3.8 호환성을 위한 '확실한' 구버전 고정
+    # [핵심 변경] 버전 고정(==)을 제거하고 최신 버전을 받습니다.
+    # Python 3.9+ 환경(Spark 3.5.1)에서는 최신 yfinance가 잘 돌아갑니다.
     subprocess.check_call([
         sys.executable, "-m", "pip", "install",
-        "yfinance==0.2.18",       # Python 3.8에서 안정적인 버전
-        "multitasking==0.0.7",    # type[] 문법 오류가 없는 구버전
-        "pandas<2.0.0",           # Spark 3.x 호환
+        "yfinance",      # 최신 버전 설치 (Yahoo 변경사항 대응 완료됨)
+        "pandas",        # 최신 버전
         "lxml",
         "requests",
         "--target", install_path,
