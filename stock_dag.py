@@ -26,7 +26,7 @@ with DAG(
         namespace='airflow',
         
         # [핵심 1] 이미지를 Bitnami 버전(Python 3.11 탑재)으로 변경
-        image='bitnami/spark:3.5',
+        image='bitnami/spark:3.5.1',
         
         startup_timeout_seconds=600,
         
