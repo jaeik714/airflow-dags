@@ -6,18 +6,18 @@ import subprocess
 # 1. 라이브러리 설치 (버전 조정)
 # ==========================================
 def install_libraries():
+    # Bitnami는 권한이 좀 더 엄격할 수 있어 /tmp 사용이 필수입니다.
     install_path = "/tmp/pylibs"
     os.makedirs(install_path, exist_ok=True)
     
-    print(f">>> [Setup] Python Version: {sys.version}")
-    print(f">>> [Setup] Installing LATEST libraries to {install_path}...")
+    print(f">>> [Setup] Python Version Check: {sys.version}") # 여기서 3.11이 찍힐 겁니다.
+    print(f">>> [Setup] Installing LATEST libraries...")
 
-    # [핵심 변경] 버전 고정(==)을 제거하고 최신 버전을 받습니다.
-    # Python 3.9+ 환경(Spark 3.5.1)에서는 최신 yfinance가 잘 돌아갑니다.
+    # [핵심] 버전 제약 없이 그냥 설치 (Python 3.11이라 호환성 문제 없음)
     subprocess.check_call([
         sys.executable, "-m", "pip", "install",
-        "yfinance",      # 최신 버전 설치 (Yahoo 변경사항 대응 완료됨)
-        "pandas",        # 최신 버전
+        "yfinance",  
+        "pandas",
         "lxml",
         "requests",
         "--target", install_path,

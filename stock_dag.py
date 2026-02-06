@@ -15,7 +15,7 @@ SCRIPT_FILE_NAME = "stock_loader.py"
 with DAG(
     'load_stock_data',
     start_date=datetime(2026, 2, 1),
-    schedule_interval='0 9 * * *', # 매일 아침 9시 실행 (UTC 기준 0시)
+    schedule_interval='0 9 * * *',
     catchup=False,
     tags=['spark', 'stock', 'finance']
 ) as dag:
@@ -24,15 +24,16 @@ with DAG(
         task_id='fetch_stock_prices',
         name='spark-stock-runner',
         namespace='airflow',
-        image='apache/spark:3.5.1',
+        
+        # [핵심 1] 이미지를 Bitnami 버전(Python 3.11 탑재)으로 변경
+        image='bitnami/spark:3.5',
+        
         startup_timeout_seconds=600,
         
-        # 1. 코드를 담을 볼륨
         volumes=[
             k8s.V1Volume(name='code-storage', empty_dir=k8s.V1EmptyDirVolumeSource())
         ],
         
-        # 2. 코드 다운로드 (Git-Sync)
         init_containers=[
             k8s.V1Container(
                 name="fetch-code",
@@ -44,6 +45,8 @@ with DAG(
                     k8s.V1EnvVar(name="GIT_SYNC_DEST", value="repo"),
                     k8s.V1EnvVar(name="GIT_SYNC_ONE_TIME", value="true"),
                 ],
+                # Bitnami 이미지는 보안상 user 1001로 실행되므로 권한 문제 방지
+                security_context=k8s.V1SecurityContext(run_as_user=0), 
                 volume_mounts=[
                     k8s.V1VolumeMount(name="code-storage", mount_path="/tmp/code")
                 ]
@@ -56,10 +59,10 @@ with DAG(
 
         cmds=["/bin/bash", "-c"],
         
-        # 3. PySpark 실행 (한 줄로 작성)
+        # [핵심 2] Bitnami 경로(/opt/bitnami/spark)에 맞춰 명령어 수정
         arguments=[
             f"""
-            /opt/spark/bin/spark-submit \
+            /opt/bitnami/spark/bin/spark-submit \
             --master local[*] \
             --conf spark.jars.ivy=/tmp/.ivy2 \
             --packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
