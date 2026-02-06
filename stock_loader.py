@@ -1,77 +1,31 @@
 import os
-import sys
-import subprocess
-
-# ==========================================
-# 1. 라이브러리 설치 (버전 조정)
-# ==========================================
-def install_libraries():
-    # Bitnami는 권한이 좀 더 엄격할 수 있어 /tmp 사용이 필수입니다.
-    install_path = "/tmp/pylibs"
-    os.makedirs(install_path, exist_ok=True)
-    
-    print(f">>> [Setup] Python Version Check: {sys.version}") # 여기서 3.11이 찍힐 겁니다.
-    print(f">>> [Setup] Installing LATEST libraries...")
-
-    # [핵심] 버전 제약 없이 그냥 설치 (Python 3.11이라 호환성 문제 없음)
-    subprocess.check_call([
-        sys.executable, "-m", "pip", "install",
-        "yfinance",  
-        "pandas",
-        "lxml",
-        "requests",
-        "--target", install_path,
-        "--no-cache-dir"
-    ])
-    
-    sys.path.insert(0, install_path)
-    print(">>> [Setup] Library installation complete.")
-
-install_libraries()
-
-# ==========================================
-# 2. Main Logic
-# ==========================================
 import yfinance as yf
 import pandas as pd
-from pyspark.sql import SparkSession
-# [핵심] 스키마를 명시하기 위해 타입 임포트
-from pyspark.sql.types import StructType, StructField, StringType, FloatType, LongType
+import s3fs
 
 def run_job():
-    print(">>> [Start] Spark Session 생성 중...")
-    spark = SparkSession.builder \
-        .appName("US-Stock-Loader") \
-        .enableHiveSupport() \
-        .getOrCreate()
+    print(">>> [Start] 미국 주식 데이터 수집 (Python Native Mode)")
 
     tickers = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"]
-    print(f">>> [Extract] 수집 대상 종목: {tickers}")
+    print(f">>> 수집 대상: {tickers}")
 
-    # 데이터 다운로드
+    # 1. 데이터 다운로드 (최신 yfinance 사용 가능)
     try:
         pdf = yf.download(tickers, period="1mo", group_by='ticker', auto_adjust=True)
     except Exception as e:
-        print(f"!!! [Error] yfinance download failed: {e}")
-        spark.stop()
+        print(f"!!! Error downloading: {e}")
         return
 
-    # 데이터가 비어있는지 1차 확인
     if pdf.empty:
-        print("!!! [Warning] 다운로드된 데이터가 없습니다. (Yahoo API 이슈 또는 종목명 오류)")
-        spark.stop()
+        print("!!! No data found.")
         return
 
+    # 2. 데이터 변환 (Spark DataFrame 대신 Pandas DataFrame 정리)
     records = []
-    print(">>> [Process] 데이터 변환 중...")
-    
     for ticker in tickers:
         try:
-            # 단일 종목/다중 종목 구조 차이 처리
             if len(tickers) > 1:
-                if ticker not in pdf.columns.levels[0]:
-                    print(f" - {ticker}: 데이터 없음 (Pass)")
-                    continue
+                if ticker not in pdf.columns.levels[0]: continue
                 df_ticker = pdf[ticker].copy()
             else:
                 df_ticker = pdf.copy()
@@ -80,55 +34,52 @@ def run_job():
             df_ticker.reset_index(inplace=True)
             df_ticker['Date'] = df_ticker['Date'].astype(str)
             
-            for _, row in df_ticker.iterrows():
-                if pd.isna(row['Close']): continue
-                
-                records.append((
-                    row['Date'], 
-                    row['ticker'], 
-                    float(row['Close']), 
-                    float(row['Open']), 
-                    float(row['High']), 
-                    float(row['Low']), 
-                    int(row['Volume'])
-                ))
+            # 필요한 컬럼만 남기기
+            df_ticker = df_ticker[['Date', 'ticker', 'Close', 'Open', 'High', 'Low', 'Volume']]
+            # 컬럼명 소문자로 통일 (Hive/Trino 호환성 위해)
+            df_ticker.columns = ['date', 'ticker', 'close', 'open', 'high', 'low', 'volume']
+            
+            records.append(df_ticker)
         except Exception as e:
-            print(f"!!! [Error] Processing {ticker}: {e}")
+            print(f"Error processing {ticker}: {e}")
 
-    print(f">>> [Process] 변환된 레코드 수: {len(records)} 건")
-
-    # 3. 데이터가 없을 경우 안전하게 종료
-    if len(records) == 0:
-        print("!!! [Warning] 처리할 데이터가 0건입니다. 작업을 종료합니다.")
-        spark.stop()
+    if not records:
+        print("!!! No records to save.")
         return
 
-    # 4. [핵심] 스키마 강제 지정 (데이터가 비어 있어도 에러 안 나게 함)
-    schema = StructType([
-        StructField("date", StringType(), True),
-        StructField("ticker", StringType(), True),
-        StructField("close", FloatType(), True),
-        StructField("open", FloatType(), True),
-        StructField("high", FloatType(), True),
-        StructField("low", FloatType(), True),
-        StructField("volume", LongType(), True)
-    ])
+    # 모든 종목 데이터를 하나로 합치기
+    final_df = pd.concat(records)
+    print(f">>> 수집된 데이터: {len(final_df)} 건")
+    print(final_df.head())
 
-    spark_df = spark.createDataFrame(records, schema=schema)
+    # 3. MinIO에 Parquet으로 저장 (S3FS 사용)
+    print(">>> MinIO 저장 시작...")
     
-    print(">>> [Preview] 데이터 미리보기:")
-    spark_df.show(5)
+    # MinIO 접속 정보
+    minio_endpoint = "http://minio.airflow.svc.cluster.local:9000"
+    s3 = s3fs.S3FileSystem(
+        key='admin',
+        secret='password123',
+        client_kwargs={'endpoint_url': minio_endpoint}
+    )
 
-    # 5. 저장
-    print(">>> [Load] Hive/MinIO에 저장 시작...")
-    spark.sql("CREATE DATABASE IF NOT EXISTS stock_db")
-    spark.sql("USE stock_db")
-    
-    # 파티셔닝 저장
-    spark_df.write.mode("overwrite").partitionBy("ticker").saveAsTable("daily_prices")
-    
-    print(">>> [Success] 모든 작업 완료!")
-    spark.stop()
+    # 저장 경로: s3://warehouse/daily_prices
+    save_path = "s3://warehouse/daily_prices"
+
+    try:
+        # partition_cols=['ticker']를 쓰면 폴더가 ticker=NVDA 식으로 예쁘게 생깁니다.
+        final_df.to_parquet(
+            save_path,
+            filesystem=s3,
+            partition_cols=['ticker'],
+            index=False
+        )
+        print(">>> [Success] 저장 완료!")
+        
+    except Exception as e:
+        print(f"!!! 저장 실패: {e}")
+        # 혹시 버킷이 없어서 에러나면 알려주기 위함
+        print("Tip: MinIO에 'warehouse' 버킷이 있는지 확인하세요.")
 
 if __name__ == "__main__":
     run_job()
