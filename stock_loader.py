@@ -6,7 +6,7 @@ import s3fs
 def run_job():
     print(">>> [Start] 미국 주식 데이터 수집 (Python Native Mode)")
 
-    tickers = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"]
+    tickers = ["VOO", "SPY", "QQQ", "NVDA", "AAPL", "TSLA"]
     print(f">>> 수집 대상: {tickers}")
 
     # 1. 데이터 다운로드 (최신 yfinance 사용 가능)
